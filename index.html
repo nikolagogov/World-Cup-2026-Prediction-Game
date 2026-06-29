@@ -59,6 +59,16 @@
         .warning-message{background:#fff3cd;color:#856404;padding:8px;border-radius:8px;margin:10px 0}
         .note-message{background:#d1ecf1;color:#0c5460;padding:8px;border-radius:8px;margin:10px 0;font-size:12px}
         .button-group{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+        .predict-match{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #eee;flex-wrap:wrap;gap:5px}
+        .predict-match-entered{background:#e8f5e9}
+        .predict-match-correct{background:#d4edda}
+        .predict-match-partial{background:#fff3cd}
+        .predict-match-wrong{background:#f8d7da}
+        .predict-extra{display:none;margin-top:4px;padding:4px 8px;background:#f8f9fa;border-radius:4px;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px}
+        .predict-extra.show{display:flex}
+        .predict-points{font-weight:bold;color:#0a3d1f;min-width:60px;text-align:center}
+        .phase-group{margin-bottom:20px;border:1px solid #e0e0e0;border-radius:12px;padding:10px;background:#fafafa}
+        .phase-group h4{background:#0a3d1f;color:#fff;padding:6px 12px;border-radius:8px;margin-bottom:10px;font-size:14px}
         @media (max-width:768px){.match{flex-direction:column;align-items:stretch;gap:5px}.group-table{width:100%}input[type=number]{width:40px}.btn{padding:6px 12px;font-size:12px}}
     </style>
     <!-- Firebase SDK (compat version) -->
@@ -76,7 +86,8 @@
         <span id="syncText">Готово</span>
     </div>
     <div>
-        <!-- Тук можеш да добавиш бутони, ако искаш -->
+        <button class="sync-btn" onclick="syncFromServer()">⬇️ Обнови</button>
+        <button class="sync-btn" onclick="syncToServer()">⬆️ Качи</button>
     </div>
 </div>
 
@@ -93,7 +104,9 @@
     <div class="legend">
         <div><span class="legend-color" style="background:#e8f5e9; border:1px solid #ccc;"></span> Въведен резултат</div>
         <div><span class="legend-color" style="background:#fff; border:1px solid #ccc;"></span> Чака резултат</div>
-        <div><span class="legend-color" style="background:#4caf50;"></span> Група завършена</div>
+        <div><span class="legend-color" style="background:#d4edda;"></span> Точна прогноза</div>
+        <div><span class="legend-color" style="background:#fff3cd;"></span> Частична прогноза</div>
+        <div><span class="legend-color" style="background:#f8d7da;"></span> Грешна прогноза</div>
     </div>
 
     <div id="section-players" class="section active">
@@ -104,6 +117,7 @@
             <button class="btn btn-grey" onclick="exportData()">📤 Експорт (локален JSON)</button>
             <button class="btn btn-grey" onclick="document.getElementById('importFile').click()">📥 Импорт (пълен)</button>
             <button class="btn btn-grey" onclick="document.getElementById('mergeFile').click()">🔀 Merge прогнози</button>
+            <button class="btn btn-red" onclick="resetToDefault()">🔄 Нулирай</button>
         </div>
         <input type="file" id="importFile" style="display:none" onchange="importData(event)">
         <input type="file" id="mergeFile" style="display:none" onchange="mergeData(event)">
@@ -131,7 +145,8 @@
 
     <div id="section-predict" class="section">
         <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:15px;">
-             <select id="playerSelect" style="width:220px; padding:8px;" onchange="renderPredictions()"></select>
+             <select id="playerSelect" style="width:220px; padding:8px; border-radius:8px; border:1px solid #ccc;" onchange="renderPredictions()"></select>
+             <span style="font-size:13px; color:#666;">Избери играч за прогнози</span>
         </div>
         <div class="phase-buttons" id="phaseButtons"></div>
         <div id="predict-list"></div>
@@ -677,7 +692,6 @@ function calculatePlayerBonusPoints(player) {
     return bonus;
 }
 
-// ==================== БОНУС ЗА ЕЛИМИНАЦИИ ====================
 function calculateEliminationPhaseBonus(player) {
     if (!isGroupStageComplete()) return 0;
     
@@ -1052,7 +1066,7 @@ function toggleThirdSelection(group) {
     renderThirdsSelection(); renderEliminations(); renderPhaseButtons(); renderPredictions();
 }
 
-// ==================== ЕЛИМИНАЦИИ - RENDER И SAVE (ПОПРАВЕНИ) ====================
+// ==================== ЕЛИМИНАЦИИ - RENDER И SAVE ====================
 function checkElimTie(matchId) {
     let h = parseInt(document.getElementById(`elim_h_${matchId}`)?.value);
     let a = parseInt(document.getElementById(`elim_a_${matchId}`)?.value);
@@ -1168,13 +1182,11 @@ function saveElimResults() {
         let penH = parseInt(document.getElementById(`elim_penH_${m.id}`)?.value);
         let penA = parseInt(document.getElementById(`elim_penA_${m.id}`)?.value);
         
-        // Ако и двете полета са празни - изтриваме резултата
         if (hField?.value === '' && aField?.value === '') {
             delete state.elimResults[m.id];
             continue;
         }
         
-        // Проверка за валидни числа
         if (!isNaN(h) && !isNaN(a) && h >= 0 && a >= 0) {
             let obj = {h: h, a: a};
             
@@ -1221,7 +1233,7 @@ function renderPhaseButtons() {
 }
 function setPredictPhase(phase) { state.predictPhase=phase; renderPhaseButtons(); renderPredictions(); }
 
-// ==================== ПРОГНОЗИ С ПОЕТАПЕН ИЗГЛЕД ====================
+// ==================== ПРОГНОЗИ - САМО ЗА ТЕКУЩИЯ ИГРАЧ, ВИЗУАЛНО ОФОРМЛЕНИЕ ====================
 function checkPredTie(matchId) {
     let h = parseInt(document.getElementById(`ph_${matchId}`)?.value);
     let a = parseInt(document.getElementById(`pa_${matchId}`)?.value);
@@ -1267,14 +1279,15 @@ function renderPredictions() {
     let matchesToShow = [];
     let isElim = false;
     let mult = 1;
+    let phaseName = "Групова фаза";
     
-    if (phase === 'group') { matchesToShow = matches; isElim = false; mult = 1; }
-    else if (phase === 'R32') { matchesToShow = all.filter(m => m.phase === "R32"); isElim = true; mult = 2; }
-    else if (phase === 'R16') { matchesToShow = all.filter(m => m.phase === "R16"); isElim = true; mult = 3; }
-    else if (phase === 'QF') { matchesToShow = all.filter(m => m.phase === "QF"); isElim = true; mult = 4; }
-    else if (phase === 'SF') { matchesToShow = all.filter(m => m.phase === "SF"); isElim = true; mult = 5; }
-    else if (phase === 'TP') { matchesToShow = all.filter(m => m.phase === "TP"); isElim = true; mult = 5; }
-    else if (phase === 'F') { matchesToShow = all.filter(m => m.phase === "F"); isElim = true; mult = 6; }
+    if (phase === 'group') { matchesToShow = matches; isElim = false; mult = 1; phaseName = "Групова фаза"; }
+    else if (phase === 'R32') { matchesToShow = all.filter(m => m.phase === "R32"); isElim = true; mult = 2; phaseName = "1/16 финали"; }
+    else if (phase === 'R16') { matchesToShow = all.filter(m => m.phase === "R16"); isElim = true; mult = 3; phaseName = "1/8 финали"; }
+    else if (phase === 'QF') { matchesToShow = all.filter(m => m.phase === "QF"); isElim = true; mult = 4; phaseName = "1/4 финали"; }
+    else if (phase === 'SF') { matchesToShow = all.filter(m => m.phase === "SF"); isElim = true; mult = 5; phaseName = "Полуфинали"; }
+    else if (phase === 'TP') { matchesToShow = all.filter(m => m.phase === "TP"); isElim = true; mult = 5; phaseName = "Мач за 3-то място"; }
+    else if (phase === 'F') { matchesToShow = all.filter(m => m.phase === "F"); isElim = true; mult = 6; phaseName = "Финал"; }
     
     if (!matchesToShow.length) {
         document.getElementById('predict-list').innerHTML = '<div class="info-message">Няма генерирани мачове за тази фаза.</div>';
@@ -1284,26 +1297,31 @@ function renderPredictions() {
     let preds = state.predictions[player] || {};
     let results = (phase === 'group') ? state.results : state.elimResults;
     let totalPoints = 0;
+    let totalMatches = 0;
     
-    let html = matchesToShow.map(m => {
+    let html = `<div class="phase-group"><h4>📋 ${phaseName} (${matchesToShow.length} мача, множител ×${mult})</h4>`;
+    
+    for (let m of matchesToShow) {
+        let isGen = m.home.includes("Победител") || m.home.includes("Загубил");
         let p = preds[m.id] || {};
         let r = results[m.id] || {};
         
-        let isGen = m.home.includes("Победител") || m.home.includes("Загубил");
         if (isGen) {
-            return `<div class="match" style="opacity:0.6; justify-content:center; background:#f5f5f5; padding:8px 15px; border-radius:6px;">
-                <span>${m.home}</span>
-                <span style="margin:0 15px;">vs</span>
-                <span>${m.away}</span>
+            html += `<div class="match" style="opacity:0.6; justify-content:center; background:#f5f5f5; padding:8px 15px; border-radius:6px; margin-bottom:4px;">
+                <span style="font-weight:500;">${m.home}</span>
+                <span style="margin:0 15px; color:#999;">vs</span>
+                <span style="font-weight:500;">${m.away}</span>
                 <span style="font-size:11px; color:#999; margin-left:10px;">(ще се уточни)</span>
             </div>`;
+            continue;
         }
         
+        totalMatches++;
         let hasResult = (r.h !== undefined && r.h !== '');
         let hasPrediction = (p.h !== undefined && p.h !== '');
-        
-        let bgColor = '#ffffff';
         let points = 0;
+        let bgClass = '';
+        let entered = hasPrediction || hasResult;
         
         if (hasResult && hasPrediction) {
             let ph = parseInt(p.h), pa = parseInt(p.a);
@@ -1311,10 +1329,10 @@ function renderPredictions() {
             
             if (!isNaN(ph) && !isNaN(pa) && !isNaN(rh) && !isNaN(ra)) {
                 if (!isElim) {
-                    if (ph === rh && pa === ra) points = 3 * mult;
-                    else if ((ph - pa) === (rh - ra)) points = 2 * mult;
-                    else if ((ph > pa && rh > ra) || (ph < pa && rh < ra)) points = 1 * mult;
-                    else points = 0;
+                    if (ph === rh && pa === ra) { points = 3 * mult; bgClass = 'predict-match-correct'; }
+                    else if ((ph - pa) === (rh - ra)) { points = 2 * mult; bgClass = 'predict-match-partial'; }
+                    else if ((ph > pa && rh > ra) || (ph < pa && rh < ra)) { points = 1 * mult; bgClass = 'predict-match-partial'; }
+                    else { points = 0; bgClass = 'predict-match-wrong'; }
                 } else {
                     if (r.exH !== undefined && r.exH !== '' && r.exA !== undefined && r.exA !== '') {
                         let totalRH = rh + parseInt(r.exH);
@@ -1322,10 +1340,10 @@ function renderPredictions() {
                         let totalPH = ph + (p.exH !== undefined ? parseInt(p.exH) : 0);
                         let totalPA = pa + (p.exA !== undefined ? parseInt(p.exA) : 0);
                         
-                        if (totalPH === totalRH && totalPA === totalRA) points = 3 * mult;
-                        else if ((totalPH - totalPA) === (totalRH - totalRA)) points = 2 * mult;
-                        else if ((totalPH > totalPA && totalRH > totalRA) || (totalPH < totalPA && totalRH < totalRA)) points = 1 * mult;
-                        else points = 0;
+                        if (totalPH === totalRH && totalPA === totalRA) { points = 3 * mult; bgClass = 'predict-match-correct'; }
+                        else if ((totalPH - totalPA) === (totalRH - totalRA)) { points = 2 * mult; bgClass = 'predict-match-partial'; }
+                        else if ((totalPH > totalPA && totalRH > totalRA) || (totalPH < totalPA && totalRH < totalRA)) { points = 1 * mult; bgClass = 'predict-match-partial'; }
+                        else { points = 0; bgClass = 'predict-match-wrong'; }
                         
                         if (p.exH !== undefined && r.exH !== undefined && p.exA !== undefined && r.exA !== undefined) {
                             let peH = parseInt(p.exH), peA = parseInt(p.exA), reH = parseInt(r.exH), reA = parseInt(r.exA);
@@ -1342,92 +1360,87 @@ function renderPredictions() {
                             }
                         }
                     } else {
-                        if (ph === rh && pa === ra) points = 3 * mult;
-                        else if ((ph - pa) === (rh - ra)) points = 2 * mult;
-                        else if ((ph > pa && rh > ra) || (ph < pa && rh < ra)) points = 1 * mult;
-                        else points = 0;
+                        if (ph === rh && pa === ra) { points = 3 * mult; bgClass = 'predict-match-correct'; }
+                        else if ((ph - pa) === (rh - ra)) { points = 2 * mult; bgClass = 'predict-match-partial'; }
+                        else if ((ph > pa && rh > ra) || (ph < pa && rh < ra)) { points = 1 * mult; bgClass = 'predict-match-partial'; }
+                        else { points = 0; bgClass = 'predict-match-wrong'; }
                     }
                 }
             }
+        } else if (hasResult && !hasPrediction) {
+            bgClass = 'match-entered';
+        } else if (hasPrediction && !hasResult) {
+            bgClass = '';
         }
         
         totalPoints += points;
         
-        if (hasResult && hasPrediction) {
-            if (points >= 3 * mult) bgColor = '#d4edda';
-            else if (points >= 2 * mult) bgColor = '#fff3cd';
-            else if (points >= 1 * mult) bgColor = '#cce5ff';
-            else bgColor = '#f8d7da';
-        } else if (hasResult && !hasPrediction) {
-            bgColor = '#f5f5f5';
-        } else {
-            bgColor = '#ffffff';
-        }
-        
-        let pointsText = (points > 0) ? `<span style="font-weight:bold; color:#0a3d1f;">🏆 ${points}т</span>` : '';
-        
         let resultText = '';
         if (hasResult) {
             if (!isElim) {
-                resultText = `Краен резултат: ${r.h}:${r.a}`;
+                resultText = `Реално: ${r.h}:${r.a}`;
             } else {
                 let regResult = `${r.h}:${r.a}`;
                 let extraResult = (r.exH !== undefined && r.exH !== '' && r.exA !== undefined && r.exA !== '') ? ` (прод.: ${r.exH}:${r.exA})` : '';
                 let penResult = (r.penH !== undefined && r.penH !== '' && r.penA !== undefined && r.penA !== '') ? ` (дузпи: ${r.penH}:${r.penA})` : '';
-                resultText = `Резултат от редовното време: ${regResult}${extraResult}${penResult}`;
+                resultText = `Реално: ${regResult}${extraResult}${penResult}`;
             }
         } else {
-            resultText = 'Чака резултат';
+            resultText = '⏳ Чака резултат';
         }
+        
+        let pointsText = (points > 0) ? `<span class="predict-points">🏆 ${points}т</span>` : 
+                         (hasResult && hasPrediction ? `<span class="predict-points" style="color:#dc3545;">0т</span>` : '');
         
         let showExtra = (p.h !== undefined && p.h !== '' && p.a !== undefined && p.a !== '' && parseInt(p.h) === parseInt(p.a));
         let showPen = showExtra && (p.exH !== undefined && p.exH !== '' && p.exA !== undefined && p.exA !== '' && parseInt(p.exH) === parseInt(p.exA));
         
-        let htmlContent = `
-            <div class="match" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; background:${bgColor}; padding:8px 15px; border-radius:6px; margin-bottom:4px; transition:0.3s;">
-                <span style="width:100px; text-align:right; font-weight:500;">${m.home}</span>
-                <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
-                    <div style="display:flex; align-items:center; gap:5px;">
-                        <input type="number" id="ph_${m.id}" value="${p.h ?? ''}" style="width:45px; text-align:center; border:1px solid #ccc; border-radius:6px; padding:4px;" min="0" onchange="checkPredTie('${m.id}')" oninput="checkPredTie('${m.id}')">
-                        <span style="font-weight:bold;">:</span>
-                        <input type="number" id="pa_${m.id}" value="${p.a ?? ''}" style="width:45px; text-align:center; border:1px solid #ccc; border-radius:6px; padding:4px;" min="0" onchange="checkPredTie('${m.id}')" oninput="checkPredTie('${m.id}')">
-                        <span style="font-size:10px; color:#888; margin-left:5px;">90'</span>
+        html += `
+            <div class="predict-match ${bgClass}" style="display:flex; flex-direction:column; padding:8px 12px; border-bottom:1px solid #eee; gap:3px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; width:100%; flex-wrap:wrap; gap:5px;">
+                    <span style="flex:1; text-align:right; font-weight:500;">${m.home}</span>
+                    <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <input type="number" id="ph_${m.id}" value="${p.h ?? ''}" style="width:40px; text-align:center; border:1px solid #ccc; border-radius:4px; padding:3px; font-weight:bold;" min="0" onchange="checkPredTie('${m.id}')" oninput="checkPredTie('${m.id}')">
+                            <span style="font-weight:bold;">:</span>
+                            <input type="number" id="pa_${m.id}" value="${p.a ?? ''}" style="width:40px; text-align:center; border:1px solid #ccc; border-radius:4px; padding:3px; font-weight:bold;" min="0" onchange="checkPredTie('${m.id}')" oninput="checkPredTie('${m.id}')">
+                            <span style="font-size:10px; color:#888; margin-left:3px;">90'</span>
+                        </div>
+                        ${isElim ? `
+                            <div id="predextra_${m.id}" class="predict-extra ${showExtra ? 'show' : ''}">
+                                <span style="font-size:11px; color:#555;">Прод.:</span>
+                                <input type="number" id="pexH_${m.id}" value="${p.exH ?? ''}" style="width:30px; text-align:center; border:1px solid #ccc; border-radius:3px; padding:2px;" min="0" onchange="checkPredExtraTie('${m.id}')" oninput="checkPredExtraTie('${m.id}')">
+                                <span style="font-weight:bold;">:</span>
+                                <input type="number" id="pexA_${m.id}" value="${p.exA ?? ''}" style="width:30px; text-align:center; border:1px solid #ccc; border-radius:3px; padding:2px;" min="0" onchange="checkPredExtraTie('${m.id}')" oninput="checkPredExtraTie('${m.id}')">
+                            </div>
+                            <div id="predpen_${m.id}" class="predict-extra ${showPen ? 'show' : ''}">
+                                <span style="font-size:11px; color:#555;">Дузпи:</span>
+                                <input type="number" id="ppenH_${m.id}" value="${p.penH ?? ''}" style="width:28px; text-align:center; border:1px solid #ccc; border-radius:3px; padding:2px;" min="0">
+                                <span style="font-weight:bold;">:</span>
+                                <input type="number" id="ppenA_${m.id}" value="${p.penA ?? ''}" style="width:28px; text-align:center; border:1px solid #ccc; border-radius:3px; padding:2px;" min="0">
+                            </div>
+                        ` : ''}
                     </div>
-                    ${isElim ? `
-                        <div id="predextra_${m.id}" style="display:${showExtra ? 'flex' : 'none'}; align-items:center; gap:5px; margin-top:2px;">
-                            <input type="number" id="pexH_${m.id}" value="${p.exH ?? ''}" style="width:35px; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px;" min="0" onchange="checkPredExtraTie('${m.id}')" oninput="checkPredExtraTie('${m.id}')">
-                            <span style="font-weight:bold;">:</span>
-                            <input type="number" id="pexA_${m.id}" value="${p.exA ?? ''}" style="width:35px; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px;" min="0" onchange="checkPredExtraTie('${m.id}')" oninput="checkPredExtraTie('${m.id}')">
-                            <span style="font-size:10px; color:#888;">прод.</span>
-                        </div>
-                        <div id="predpen_${m.id}" style="display:${showPen ? 'flex' : 'none'}; align-items:center; gap:5px; margin-top:2px;">
-                            <input type="number" id="ppenH_${m.id}" value="${p.penH ?? ''}" style="width:30px; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px;" min="0">
-                            <span style="font-weight:bold;">:</span>
-                            <input type="number" id="ppenA_${m.id}" value="${p.penA ?? ''}" style="width:30px; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px;" min="0">
-                            <span style="font-size:10px; color:#888;">дузпи</span>
-                        </div>
-                    ` : ''}
-                </div>
-                <span style="width:100px; text-align:left; font-weight:500;">${m.away}</span>
-                <div style="display:flex; flex-direction:column; align-items:center; min-width:150px;">
-                    <span style="font-size:11px; color:#666;">${resultText}</span>
-                    ${pointsText}
+                    <span style="flex:1; text-align:left; font-weight:500;">${m.away}</span>
+                    <div style="display:flex; flex-direction:column; align-items:flex-end; min-width:120px;">
+                        <span style="font-size:11px; color:#666;">${resultText}</span>
+                        ${pointsText}
+                    </div>
                 </div>
             </div>
         `;
-        return htmlContent;
-    }).join('');
+    }
     
     html += `
-        <div style="text-align:right; font-weight:bold; margin-top:20px; padding-top:15px; border-top:2px solid #0a3d1f; color:#0a3d1f;">
-            📊 Общо точки за фазата: <span style="font-size:20px;">${totalPoints}т</span>
+        <div style="text-align:right; font-weight:bold; margin-top:15px; padding-top:12px; border-top:2px solid #0a3d1f; color:#0a3d1f;">
+            📊 Общо точки за фазата: <span style="font-size:22px;">${totalPoints}т</span>
             <span style="font-size:13px; font-weight:normal; color:#666; margin-left:10px;">
-                (${matchesToShow.length} мача, макс: ${matchesToShow.length * 3 * mult}т)
+                (от ${totalMatches} мача, макс: ${totalMatches * 3 * mult}т)
             </span>
         </div>
-    `;
+    </div>`;
     
-    document.getElementById('predict-list').innerHTML = `<div style="max-width:75%; margin:0 auto;">${html}</div>`;
+    document.getElementById('predict-list').innerHTML = html;
 }
 
 function savePredictions(){
@@ -1461,7 +1474,7 @@ function savePredictions(){
             state.predictions[player][m.id]=obj;
         }
     }
-    saveToStorage(); syncToServer(); alert('Прогнозите са запазени!'); renderStandings();
+    saveToStorage(); syncToServer(); alert('Прогнозите са запазени!'); renderPredictions(); renderStandings();
 }
 
 function renderStandings() {
@@ -1599,7 +1612,7 @@ function resetToDefault() {
 loadFromStorage();
 refreshAllUI();
 setPredictPhase('group');
-syncFromServer();
+setTimeout(() => syncFromServer(), 2000);
 </script>
 </body>
 </html>
