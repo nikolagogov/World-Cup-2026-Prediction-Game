@@ -34,7 +34,8 @@
         .group-table h3{text-align:center;background:#0a3d1f;color:#fff;padding:6px;border-radius:8px;margin-bottom:8px}
         .group-table table{width:100%;border-collapse:collapse}
         .group-table th,.group-table td{padding:4px;text-align:center;font-size:13px}
-        .elim-match{display:flex;align-items:center;justify-content:space-between;padding:10px;border-bottom:1px solid #ddd;flex-wrap:wrap;gap:5px}
+        .elim-match{display:flex;flex-direction:column;padding:10px;border-bottom:1px solid #ddd;gap:5px}
+        .elim-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:5px}
         .team{flex:1;font-weight:500}
         .team.right{text-align:right}
         .player-card{background:#f8f9fa;border:1px solid #ddd;border-radius:12px;padding:10px;margin-bottom:10px;display:flex;gap:10px;align-items:center}
@@ -59,16 +60,23 @@
         .warning-message{background:#fff3cd;color:#856404;padding:8px;border-radius:8px;margin:10px 0}
         .note-message{background:#d1ecf1;color:#0c5460;padding:8px;border-radius:8px;margin:10px 0;font-size:12px}
         .button-group{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
-        .predict-match{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #eee;flex-wrap:wrap;gap:5px}
-        .predict-match-entered{background:#e8f5e9}
+        .predict-match{display:flex;flex-direction:column;padding:8px 12px;border-bottom:1px solid #eee;gap:3px}
         .predict-match-correct{background:#d4edda}
         .predict-match-partial{background:#fff3cd}
         .predict-match-wrong{background:#f8d7da}
+        .predict-match-entered{background:#e8f5e9}
         .predict-extra{display:none;margin-top:4px;padding:4px 8px;background:#f8f9fa;border-radius:4px;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px}
         .predict-extra.show{display:flex}
         .predict-points{font-weight:bold;color:#0a3d1f;min-width:60px;text-align:center}
         .phase-group{margin-bottom:20px;border:1px solid #e0e0e0;border-radius:12px;padding:10px;background:#fafafa}
         .phase-group h4{background:#0a3d1f;color:#fff;padding:6px 12px;border-radius:8px;margin-bottom:10px;font-size:14px}
+        .elim-predictions{font-size:11px;color:#555;margin-top:4px;border-top:1px dashed #ddd;padding-top:4px}
+        .elim-predictions strong{color:#0a3d1f}
+        .elim-predictions .pred-item{padding:1px 0}
+        .elim-predictions .pred-correct{color:#155724}
+        .elim-predictions .pred-partial{color:#856404}
+        .elim-predictions .pred-wrong{color:#721c24}
+        .elim-predictions .pred-noresult{color:#888}
         @media (max-width:768px){.match{flex-direction:column;align-items:stretch;gap:5px}.group-table{width:100%}input[type=number]{width:40px}.btn{padding:6px 12px;font-size:12px}}
     </style>
     <!-- Firebase SDK (compat version) -->
@@ -1066,7 +1074,7 @@ function toggleThirdSelection(group) {
     renderThirdsSelection(); renderEliminations(); renderPhaseButtons(); renderPredictions();
 }
 
-// ==================== ЕЛИМИНАЦИИ - RENDER И SAVE ====================
+// ==================== ЕЛИМИНАЦИИ - С ПРОГНОЗИ НА ВСИЧКИ ====================
 function checkElimTie(matchId) {
     let h = parseInt(document.getElementById(`elim_h_${matchId}`)?.value);
     let a = parseInt(document.getElementById(`elim_a_${matchId}`)?.value);
@@ -1129,15 +1137,68 @@ function renderEliminations() {
                 let isTie = (r.h !== undefined && r.h !== '' && r.a !== undefined && r.a !== '' && parseInt(r.h) === parseInt(r.a));
                 let isExtraTie = isTie && (r.exH !== undefined && r.exH !== '' && r.exA !== undefined && r.exA !== '' && parseInt(r.exH) === parseInt(r.exA));
                 
-                html += `<div class="elim-match" id="elim-match-${m.id}" style="flex-direction:column; align-items:stretch; gap:5px; padding:10px; border-bottom:1px solid #ddd;">
-                    <div style="display:flex; align-items:center; justify-content:space-between; width:100%;">
-                        <span class="team" style="flex:1; text-align:right; font-weight:500;">${m.home}</span>
+                // ===== ПРОГНОЗИ НА ВСИЧКИ УЧАСТНИЦИ =====
+                let predictionsHtml = '';
+                if (state.players.length > 0) {
+                    let allPredictions = [];
+                    state.players.forEach(player => {
+                        let pred = state.predictions[player]?.[m.id];
+                        if (pred && pred.h !== undefined && pred.h !== '') {
+                            let points = 0;
+                            let predText = `${pred.h}:${pred.a}`;
+                            
+                            if (pred.exH !== undefined && pred.exH !== '' && pred.exA !== undefined && pred.exA !== '') {
+                                predText += ` (прод.: ${pred.exH}:${pred.exA})`;
+                            }
+                            if (pred.penH !== undefined && pred.penH !== '' && pred.penA !== undefined && pred.penA !== '') {
+                                predText += ` (дузпи: ${pred.penH}:${pred.penA})`;
+                            }
+                            
+                            if (r.h !== undefined && r.h !== '') {
+                                let ph = parseInt(pred.h), pa = parseInt(pred.a);
+                                let rh = parseInt(r.h), ra = parseInt(r.a);
+                                if (!isNaN(ph) && !isNaN(pa) && !isNaN(rh) && !isNaN(ra)) {
+                                    if (r.exH !== undefined && r.exH !== '' && r.exA !== undefined && r.exA !== '') {
+                                        let totalRH = rh + parseInt(r.exH);
+                                        let totalRA = ra + parseInt(r.exA);
+                                        let totalPH = ph + (pred.exH !== undefined ? parseInt(pred.exH) : 0);
+                                        let totalPA = pa + (pred.exA !== undefined ? parseInt(pred.exA) : 0);
+                                        
+                                        if (totalPH === totalRH && totalPA === totalRA) points = 3 * (m.mult || 1);
+                                        else if ((totalPH - totalPA) === (totalRH - totalRA)) points = 2 * (m.mult || 1);
+                                        else if ((totalPH > totalPA && totalRH > totalRA) || (totalPH < totalPA && totalRH < totalRA)) points = 1 * (m.mult || 1);
+                                    } else {
+                                        if (ph === rh && pa === ra) points = 3 * (m.mult || 1);
+                                        else if ((ph - pa) === (rh - ra)) points = 2 * (m.mult || 1);
+                                        else if ((ph > pa && rh > ra) || (ph < pa && rh < ra)) points = 1 * (m.mult || 1);
+                                    }
+                                }
+                            }
+                            
+                            let pointsText = points > 0 ? ` 🏆${points}т` : '';
+                            let colorClass = points >= 3 * (m.mult || 1) ? 'pred-correct' : (points >= 1 * (m.mult || 1) ? 'pred-partial' : 'pred-wrong');
+                            if (!r.h || r.h === '') colorClass = 'pred-noresult';
+                            
+                            allPredictions.push(`<span class="pred-item ${colorClass}">${player}: ${predText}${pointsText}</span>`);
+                        }
+                    });
+                    
+                    if (allPredictions.length > 0) {
+                        predictionsHtml = `<div class="elim-predictions"><strong>📊 Прогнози:</strong><br>${allPredictions.map(p => `&nbsp;&nbsp;• ${p}`).join('<br>')}</div>`;
+                    } else {
+                        predictionsHtml = `<div class="elim-predictions"><strong>📊 Прогнози:</strong><br><span style="color:#999;">Няма прогнози за този мач</span></div>`;
+                    }
+                }
+                
+                html += `<div class="elim-match" id="elim-match-${m.id}">
+                    <div class="elim-row">
+                        <span class="team" style="text-align:right;">${m.home}</span>
                         <div style="display:flex; align-items:center; gap:5px;">
                             <input type="number" id="elim_h_${m.id}" value="${r.h ?? ''}" style="width:50px; text-align:center; padding:4px; border:1px solid #ccc; border-radius:6px;" min="0" onchange="checkElimTie('${m.id}')" oninput="checkElimTie('${m.id}')">
                             <span style="font-weight:bold;">:</span>
                             <input type="number" id="elim_a_${m.id}" value="${r.a ?? ''}" style="width:50px; text-align:center; padding:4px; border:1px solid #ccc; border-radius:6px;" min="0" onchange="checkElimTie('${m.id}')" oninput="checkElimTie('${m.id}')">
                         </div>
-                        <span class="team" style="flex:1; text-align:left; font-weight:500;">${m.away}</span>
+                        <span class="team">${m.away}</span>
                         <span style="font-size:11px; color:#666; margin-left:10px;">(редовно време)</span>
                     </div>
                     
@@ -1156,6 +1217,8 @@ function renderEliminations() {
                         <input type="number" id="elim_penA_${m.id}" value="${r.penA ?? ''}" style="width:45px; text-align:center; padding:4px; border:1px solid #ccc; border-radius:6px;" min="0">
                         <span style="font-size:11px; color:#888;">(резултат от дузпи)</span>
                     </div>
+                    
+                    ${predictionsHtml}
                 </div>`;
             } else {
                 html += `<div class="elim-match" style="opacity:0.6;"><span class="team">${m.home}</span><span>vs</span><span class="team right">${m.away}</span></div>`;
@@ -1233,7 +1296,7 @@ function renderPhaseButtons() {
 }
 function setPredictPhase(phase) { state.predictPhase=phase; renderPhaseButtons(); renderPredictions(); }
 
-// ==================== ПРОГНОЗИ - САМО ЗА ТЕКУЩИЯ ИГРАЧ, ВИЗУАЛНО ОФОРМЛЕНИЕ ====================
+// ==================== ПРОГНОЗИ - САМО ЗА ТЕКУЩИЯ ИГРАЧ ====================
 function checkPredTie(matchId) {
     let h = parseInt(document.getElementById(`ph_${matchId}`)?.value);
     let a = parseInt(document.getElementById(`pa_${matchId}`)?.value);
@@ -1321,7 +1384,6 @@ function renderPredictions() {
         let hasPrediction = (p.h !== undefined && p.h !== '');
         let points = 0;
         let bgClass = '';
-        let entered = hasPrediction || hasResult;
         
         if (hasResult && hasPrediction) {
             let ph = parseInt(p.h), pa = parseInt(p.a);
@@ -1368,9 +1430,7 @@ function renderPredictions() {
                 }
             }
         } else if (hasResult && !hasPrediction) {
-            bgClass = 'match-entered';
-        } else if (hasPrediction && !hasResult) {
-            bgClass = '';
+            bgClass = 'predict-match-entered';
         }
         
         totalPoints += points;
