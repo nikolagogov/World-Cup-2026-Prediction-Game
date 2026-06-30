@@ -634,30 +634,48 @@ function calcPoints(pred, real, mult, isElim) {
     if (!pred || !real) return 0;
     let pts = 0;
     
-    // 1. Точки за редовно време (винаги се брои)
+    // 1. Редовно време (винаги се брои)
     let ph = parseInt(pred.h), pa = parseInt(pred.a);
     let rh = parseInt(real.h), ra = parseInt(real.a);
     if (!isNaN(ph) && !isNaN(pa) && !isNaN(rh) && !isNaN(ra)) {
         pts += calculateMatchPoints(ph, pa, rh, ra);
     }
     
-    // 2. Точки за продължения (само ако има попълнени и в двете)
-    if (isElim && pred.exH !== undefined && pred.exA !== undefined && 
-        real.exH !== undefined && real.exA !== undefined) {
-        let peH = parseInt(pred.exH), peA = parseInt(pred.exA);
-        let reH = parseInt(real.exH), reA = parseInt(real.exA);
-        if (!isNaN(peH) && !isNaN(peA) && !isNaN(reH) && !isNaN(reA)) {
-            pts += calculateMatchPoints(peH, peA, reH, reA);
+    // 2. Продължения - САМО ако редовното време е равенство И в прогнозата, И в реалния резултат
+    if (isElim && ph === pa && rh === ra) {
+        if (pred.exH !== undefined && pred.exH !== '' && pred.exA !== undefined && pred.exA !== '' &&
+            real.exH !== undefined && real.exH !== '' && real.exA !== undefined && real.exA !== '') {
+            let peH = parseInt(pred.exH), peA = parseInt(pred.exA);
+            let reH = parseInt(real.exH), reA = parseInt(real.exA);
+            if (!isNaN(peH) && !isNaN(peA) && !isNaN(reH) && !isNaN(reA)) {
+                pts += calculateMatchPoints(peH, peA, reH, reA);
+            }
         }
     }
     
-    // 3. Точки за дузпи (само ако има попълнени и в двете)
-    if (isElim && pred.penH !== undefined && pred.penA !== undefined && 
-        real.penH !== undefined && real.penA !== undefined) {
-        let ppH = parseInt(pred.penH), ppA = parseInt(pred.penA);
-        let rpH = parseInt(real.penH), rpA = parseInt(real.penA);
-        if (!isNaN(ppH) && !isNaN(ppA) && !isNaN(rpH) && !isNaN(rpA)) {
-            pts += calculateMatchPoints(ppH, ppA, rpH, rpA);
+    // 3. Дузпи - САМО ако редовното време И продълженията са равенство
+    if (isElim && ph === pa && rh === ra) {
+        // Проверка дали има попълнени продължения и дали са равни
+        let hasExtra = (pred.exH !== undefined && pred.exH !== '' && pred.exA !== undefined && pred.exA !== '' &&
+                       real.exH !== undefined && real.exH !== '' && real.exA !== undefined && real.exA !== '');
+        let extraEqual = false;
+        if (hasExtra) {
+            let peH = parseInt(pred.exH), peA = parseInt(pred.exA);
+            let reH = parseInt(real.exH), reA = parseInt(real.exA);
+            if (!isNaN(peH) && !isNaN(peA) && !isNaN(reH) && !isNaN(reA)) {
+                extraEqual = (peH === peA && reH === reA);
+            }
+        }
+        
+        if (extraEqual) {
+            if (pred.penH !== undefined && pred.penH !== '' && pred.penA !== undefined && pred.penA !== '' &&
+                real.penH !== undefined && real.penH !== '' && real.penA !== undefined && real.penA !== '') {
+                let ppH = parseInt(pred.penH), ppA = parseInt(pred.penA);
+                let rpH = parseInt(real.penH), rpA = parseInt(real.penA);
+                if (!isNaN(ppH) && !isNaN(ppA) && !isNaN(rpH) && !isNaN(rpA)) {
+                    pts += calculateMatchPoints(ppH, ppA, rpH, rpA);
+                }
+            }
         }
     }
     
@@ -1179,29 +1197,7 @@ function renderEliminations() {
                             }
                             
                             if (r.h !== undefined && r.h !== '') {
-                                let ph = parseInt(pred.h), pa = parseInt(pred.a);
-                                let rh = parseInt(r.h), ra = parseInt(r.a);
-                                if (!isNaN(ph) && !isNaN(pa) && !isNaN(rh) && !isNaN(ra)) {
-                                    // Използваме новата логика за точкуване
-                                    let pts = 0;
-                                    pts += calculateMatchPoints(ph, pa, rh, ra);
-                                    
-                                    if (r.exH !== undefined && r.exH !== '' && r.exA !== undefined && r.exA !== '') {
-                                        let peH = parseInt(pred.exH || 0), peA = parseInt(pred.exA || 0);
-                                        let reH = parseInt(r.exH), reA = parseInt(r.exA);
-                                        if (!isNaN(peH) && !isNaN(peA) && !isNaN(reH) && !isNaN(reA)) {
-                                            pts += calculateMatchPoints(peH, peA, reH, reA);
-                                        }
-                                    }
-                                    if (r.penH !== undefined && r.penH !== '' && r.penA !== undefined && r.penA !== '') {
-                                        let ppH = parseInt(pred.penH || 0), ppA = parseInt(pred.penA || 0);
-                                        let rpH = parseInt(r.penH), rpA = parseInt(r.penA);
-                                        if (!isNaN(ppH) && !isNaN(ppA) && !isNaN(rpH) && !isNaN(rpA)) {
-                                            pts += calculateMatchPoints(ppH, ppA, rpH, rpA);
-                                        }
-                                    }
-                                    points = pts * (m.mult || 1);
-                                }
+                                points = calcPoints(pred, r, m.mult || 1, true);
                             }
                             
                             let pointsText = points > 0 ? ` 🏆${points}т` : '';
@@ -1415,41 +1411,12 @@ function renderPredictions() {
         let bgClass = '';
         
         if (hasResult && hasPrediction) {
-            // Използваме новата логика за точкуване
-            let ph = parseInt(p.h), pa = parseInt(p.a);
-            let rh = parseInt(r.h), ra = parseInt(r.a);
+            // ИЗПОЛЗВАМЕ calcPoints() ЗА ПРАВИЛНО ИЗЧИСЛЕНИЕ
+            points = calcPoints(p, r, mult, isElim);
             
-            if (!isNaN(ph) && !isNaN(pa) && !isNaN(rh) && !isNaN(ra)) {
-                // Редовно време
-                let matchPts = calculateMatchPoints(ph, pa, rh, ra);
-                points += matchPts;
-                
-                // Продължения
-                if (r.exH !== undefined && r.exH !== '' && r.exA !== undefined && r.exA !== '') {
-                    let peH = parseInt(p.exH || 0), peA = parseInt(p.exA || 0);
-                    let reH = parseInt(r.exH), reA = parseInt(r.exA);
-                    if (!isNaN(peH) && !isNaN(peA) && !isNaN(reH) && !isNaN(reA)) {
-                        let extraPts = calculateMatchPoints(peH, peA, reH, reA);
-                        points += extraPts;
-                    }
-                }
-                
-                // Дузпи
-                if (r.penH !== undefined && r.penH !== '' && r.penA !== undefined && r.penA !== '') {
-                    let ppH = parseInt(p.penH || 0), ppA = parseInt(p.penA || 0);
-                    let rpH = parseInt(r.penH), rpA = parseInt(r.penA);
-                    if (!isNaN(ppH) && !isNaN(ppA) && !isNaN(rpH) && !isNaN(rpA)) {
-                        let penPts = calculateMatchPoints(ppH, ppA, rpH, rpA);
-                        points += penPts;
-                    }
-                }
-                
-                points *= mult;
-                
-                if (points >= 3 * mult) bgClass = 'predict-match-correct';
-                else if (points >= 1 * mult) bgClass = 'predict-match-partial';
-                else bgClass = 'predict-match-wrong';
-            }
+            if (points >= 3 * mult) bgClass = 'predict-match-correct';
+            else if (points >= 1 * mult) bgClass = 'predict-match-partial';
+            else bgClass = 'predict-match-wrong';
         } else if (hasResult && !hasPrediction) {
             bgClass = 'predict-match-entered';
         }
@@ -1696,4 +1663,4 @@ setPredictPhase('group');
 setTimeout(() => syncFromServer(), 2000);
 </script>
 </body>
-    </html>
+</html>
