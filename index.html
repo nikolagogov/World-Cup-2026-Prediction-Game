@@ -160,9 +160,8 @@
         <div id="predict-list"></div>
         <button class="btn" onclick="savePredictions()">💾 Запази прогнози</button>
         <div class="info-message">
-            📊 <strong>Точкуване:</strong> Групова(×1) | 1/16(×2) | 1/8(×3) | 1/4(×4) | Полуфинал(×5) | 3-то място(×5) | Финал(×6)<br>
+            📊 <strong>Точкуване:</strong> Всяка част (ред.време, продължения, дузпи) се точкува отделно: 3т/2т/1т/0т<br>
             🎯 <strong>Бонуси (след групи):</strong> +10 за пълна точна подредба | +3 за точен 1-ви | +2 за точно 2-ро<br>
-            ⏱️ <strong>Продължения/дузпи (само елиминации):</strong> +2т за точен резултат след продължения | +1т за точен победител от дузпи<br>
             🏆 <strong>Бонуси за елиминации:</strong> до 70т бонус за точни победители в етапите (мин. 50% точни)
         </div>
     </div>
@@ -621,23 +620,48 @@ function getAvailablePhases() {
     return phases;
 }
 
-function calcPoints(pred, real, mult, isElim){
-    if(!pred || !real) return 0;
-    let ph=parseInt(pred.h), pa=parseInt(pred.a), rh=parseInt(real.h), ra=parseInt(real.a);
-    if(isNaN(ph)||isNaN(pa)||isNaN(rh)||isNaN(ra)) return 0;
-    let pts=0;
-    if(ph===rh && pa===ra) pts=3*mult;
-    else if((ph-pa)===(rh-ra)) pts=2*mult;
-    else if((ph>pa && rh>ra) || (ph<pa && rh<ra)) pts=1*mult;
-    if(isElim && pred.exH !== undefined && real.exH !== undefined && pred.exA !== undefined && real.exA !== undefined) {
-        let peH=parseInt(pred.exH), peA=parseInt(pred.exA), reH=parseInt(real.exH), reA=parseInt(real.exA);
-        if(!isNaN(peH) && !isNaN(peA) && !isNaN(reH) && !isNaN(reA) && peH===reH && peA===reA) pts+=2*mult;
+// ==================== НОВА ЛОГИКА ЗА ТОЧКУВАНЕ ====================
+function calculateMatchPoints(predH, predA, realH, realA) {
+    if (isNaN(predH) || isNaN(predA) || isNaN(realH) || isNaN(realA)) return 0;
+    if (predH === realH && predA === realA) return 3;        // Точен резултат
+    if ((predH - predA) === (realH - realA)) return 2;       // Точна голова разлика
+    if ((predH > predA && realH > realA) || 
+        (predH < predA && realH < realA)) return 1;          // Правилна посока
+    return 0;                                                 // Грешен резултат
+}
+
+function calcPoints(pred, real, mult, isElim) {
+    if (!pred || !real) return 0;
+    let pts = 0;
+    
+    // 1. Точки за редовно време (винаги се брои)
+    let ph = parseInt(pred.h), pa = parseInt(pred.a);
+    let rh = parseInt(real.h), ra = parseInt(real.a);
+    if (!isNaN(ph) && !isNaN(pa) && !isNaN(rh) && !isNaN(ra)) {
+        pts += calculateMatchPoints(ph, pa, rh, ra);
     }
-    if(isElim && pred.penH !== undefined && real.penH !== undefined && pred.penA !== undefined && real.penA !== undefined) {
-        let ppH=parseInt(pred.penH), ppA=parseInt(pred.penA), rpH=parseInt(real.penH), rpA=parseInt(real.penA);
-        if(!isNaN(ppH) && !isNaN(ppA) && !isNaN(rpH) && !isNaN(rpA) && ppH===rpH && ppA===rpA) pts+=1*mult;
+    
+    // 2. Точки за продължения (само ако има попълнени и в двете)
+    if (isElim && pred.exH !== undefined && pred.exA !== undefined && 
+        real.exH !== undefined && real.exA !== undefined) {
+        let peH = parseInt(pred.exH), peA = parseInt(pred.exA);
+        let reH = parseInt(real.exH), reA = parseInt(real.exA);
+        if (!isNaN(peH) && !isNaN(peA) && !isNaN(reH) && !isNaN(reA)) {
+            pts += calculateMatchPoints(peH, peA, reH, reA);
+        }
     }
-    return pts;
+    
+    // 3. Точки за дузпи (само ако има попълнени и в двете)
+    if (isElim && pred.penH !== undefined && pred.penA !== undefined && 
+        real.penH !== undefined && real.penA !== undefined) {
+        let ppH = parseInt(pred.penH), ppA = parseInt(pred.penA);
+        let rpH = parseInt(real.penH), rpA = parseInt(real.penA);
+        if (!isNaN(ppH) && !isNaN(ppA) && !isNaN(rpH) && !isNaN(rpA)) {
+            pts += calculateMatchPoints(ppH, ppA, rpH, rpA);
+        }
+    }
+    
+    return pts * mult;
 }
 
 function getWinnerFromResult(result) {
@@ -1074,7 +1098,7 @@ function toggleThirdSelection(group) {
     renderThirdsSelection(); renderEliminations(); renderPhaseButtons(); renderPredictions();
 }
 
-// ==================== ЕЛИМИНАЦИИ - С ПРОГНОЗИ НА ВСИЧКИ ====================
+// ==================== ЕЛИМИНАЦИИ ====================
 function checkElimTie(matchId) {
     let h = parseInt(document.getElementById(`elim_h_${matchId}`)?.value);
     let a = parseInt(document.getElementById(`elim_a_${matchId}`)?.value);
@@ -1137,7 +1161,7 @@ function renderEliminations() {
                 let isTie = (r.h !== undefined && r.h !== '' && r.a !== undefined && r.a !== '' && parseInt(r.h) === parseInt(r.a));
                 let isExtraTie = isTie && (r.exH !== undefined && r.exH !== '' && r.exA !== undefined && r.exA !== '' && parseInt(r.exH) === parseInt(r.exA));
                 
-                // ===== ПРОГНОЗИ НА ВСИЧКИ УЧАСТНИЦИ =====
+                // Прогнози на всички участници
                 let predictionsHtml = '';
                 if (state.players.length > 0) {
                     let allPredictions = [];
@@ -1158,20 +1182,25 @@ function renderEliminations() {
                                 let ph = parseInt(pred.h), pa = parseInt(pred.a);
                                 let rh = parseInt(r.h), ra = parseInt(r.a);
                                 if (!isNaN(ph) && !isNaN(pa) && !isNaN(rh) && !isNaN(ra)) {
+                                    // Използваме новата логика за точкуване
+                                    let pts = 0;
+                                    pts += calculateMatchPoints(ph, pa, rh, ra);
+                                    
                                     if (r.exH !== undefined && r.exH !== '' && r.exA !== undefined && r.exA !== '') {
-                                        let totalRH = rh + parseInt(r.exH);
-                                        let totalRA = ra + parseInt(r.exA);
-                                        let totalPH = ph + (pred.exH !== undefined ? parseInt(pred.exH) : 0);
-                                        let totalPA = pa + (pred.exA !== undefined ? parseInt(pred.exA) : 0);
-                                        
-                                        if (totalPH === totalRH && totalPA === totalRA) points = 3 * (m.mult || 1);
-                                        else if ((totalPH - totalPA) === (totalRH - totalRA)) points = 2 * (m.mult || 1);
-                                        else if ((totalPH > totalPA && totalRH > totalRA) || (totalPH < totalPA && totalRH < totalRA)) points = 1 * (m.mult || 1);
-                                    } else {
-                                        if (ph === rh && pa === ra) points = 3 * (m.mult || 1);
-                                        else if ((ph - pa) === (rh - ra)) points = 2 * (m.mult || 1);
-                                        else if ((ph > pa && rh > ra) || (ph < pa && rh < ra)) points = 1 * (m.mult || 1);
+                                        let peH = parseInt(pred.exH || 0), peA = parseInt(pred.exA || 0);
+                                        let reH = parseInt(r.exH), reA = parseInt(r.exA);
+                                        if (!isNaN(peH) && !isNaN(peA) && !isNaN(reH) && !isNaN(reA)) {
+                                            pts += calculateMatchPoints(peH, peA, reH, reA);
+                                        }
                                     }
+                                    if (r.penH !== undefined && r.penH !== '' && r.penA !== undefined && r.penA !== '') {
+                                        let ppH = parseInt(pred.penH || 0), ppA = parseInt(pred.penA || 0);
+                                        let rpH = parseInt(r.penH), rpA = parseInt(r.penA);
+                                        if (!isNaN(ppH) && !isNaN(ppA) && !isNaN(rpH) && !isNaN(rpA)) {
+                                            pts += calculateMatchPoints(ppH, ppA, rpH, rpA);
+                                        }
+                                    }
+                                    points = pts * (m.mult || 1);
                                 }
                             }
                             
@@ -1386,48 +1415,40 @@ function renderPredictions() {
         let bgClass = '';
         
         if (hasResult && hasPrediction) {
+            // Използваме новата логика за точкуване
             let ph = parseInt(p.h), pa = parseInt(p.a);
             let rh = parseInt(r.h), ra = parseInt(r.a);
             
             if (!isNaN(ph) && !isNaN(pa) && !isNaN(rh) && !isNaN(ra)) {
-                if (!isElim) {
-                    if (ph === rh && pa === ra) { points = 3 * mult; bgClass = 'predict-match-correct'; }
-                    else if ((ph - pa) === (rh - ra)) { points = 2 * mult; bgClass = 'predict-match-partial'; }
-                    else if ((ph > pa && rh > ra) || (ph < pa && rh < ra)) { points = 1 * mult; bgClass = 'predict-match-partial'; }
-                    else { points = 0; bgClass = 'predict-match-wrong'; }
-                } else {
-                    if (r.exH !== undefined && r.exH !== '' && r.exA !== undefined && r.exA !== '') {
-                        let totalRH = rh + parseInt(r.exH);
-                        let totalRA = ra + parseInt(r.exA);
-                        let totalPH = ph + (p.exH !== undefined ? parseInt(p.exH) : 0);
-                        let totalPA = pa + (p.exA !== undefined ? parseInt(p.exA) : 0);
-                        
-                        if (totalPH === totalRH && totalPA === totalRA) { points = 3 * mult; bgClass = 'predict-match-correct'; }
-                        else if ((totalPH - totalPA) === (totalRH - totalRA)) { points = 2 * mult; bgClass = 'predict-match-partial'; }
-                        else if ((totalPH > totalPA && totalRH > totalRA) || (totalPH < totalPA && totalRH < totalRA)) { points = 1 * mult; bgClass = 'predict-match-partial'; }
-                        else { points = 0; bgClass = 'predict-match-wrong'; }
-                        
-                        if (p.exH !== undefined && r.exH !== undefined && p.exA !== undefined && r.exA !== undefined) {
-                            let peH = parseInt(p.exH), peA = parseInt(p.exA), reH = parseInt(r.exH), reA = parseInt(r.exA);
-                            if (!isNaN(peH) && !isNaN(peA) && !isNaN(reH) && !isNaN(reA) && peH === reH && peA === reA) {
-                                points += 2 * mult;
-                            }
-                        }
-                        if (r.penH !== undefined && r.penH !== '' && r.penA !== undefined && r.penA !== '') {
-                            if (p.penH !== undefined && p.penA !== undefined) {
-                                let ppH = parseInt(p.penH), ppA = parseInt(p.penA), rpH = parseInt(r.penH), rpA = parseInt(r.penA);
-                                if (!isNaN(ppH) && !isNaN(ppA) && !isNaN(rpH) && !isNaN(rpA) && ppH === rpH && ppA === rpA) {
-                                    points += 1 * mult;
-                                }
-                            }
-                        }
-                    } else {
-                        if (ph === rh && pa === ra) { points = 3 * mult; bgClass = 'predict-match-correct'; }
-                        else if ((ph - pa) === (rh - ra)) { points = 2 * mult; bgClass = 'predict-match-partial'; }
-                        else if ((ph > pa && rh > ra) || (ph < pa && rh < ra)) { points = 1 * mult; bgClass = 'predict-match-partial'; }
-                        else { points = 0; bgClass = 'predict-match-wrong'; }
+                // Редовно време
+                let matchPts = calculateMatchPoints(ph, pa, rh, ra);
+                points += matchPts;
+                
+                // Продължения
+                if (r.exH !== undefined && r.exH !== '' && r.exA !== undefined && r.exA !== '') {
+                    let peH = parseInt(p.exH || 0), peA = parseInt(p.exA || 0);
+                    let reH = parseInt(r.exH), reA = parseInt(r.exA);
+                    if (!isNaN(peH) && !isNaN(peA) && !isNaN(reH) && !isNaN(reA)) {
+                        let extraPts = calculateMatchPoints(peH, peA, reH, reA);
+                        points += extraPts;
                     }
                 }
+                
+                // Дузпи
+                if (r.penH !== undefined && r.penH !== '' && r.penA !== undefined && r.penA !== '') {
+                    let ppH = parseInt(p.penH || 0), ppA = parseInt(p.penA || 0);
+                    let rpH = parseInt(r.penH), rpA = parseInt(r.penA);
+                    if (!isNaN(ppH) && !isNaN(ppA) && !isNaN(rpH) && !isNaN(rpA)) {
+                        let penPts = calculateMatchPoints(ppH, ppA, rpH, rpA);
+                        points += penPts;
+                    }
+                }
+                
+                points *= mult;
+                
+                if (points >= 3 * mult) bgClass = 'predict-match-correct';
+                else if (points >= 1 * mult) bgClass = 'predict-match-partial';
+                else bgClass = 'predict-match-wrong';
             }
         } else if (hasResult && !hasPrediction) {
             bgClass = 'predict-match-entered';
@@ -1675,4 +1696,4 @@ setPredictPhase('group');
 setTimeout(() => syncFromServer(), 2000);
 </script>
 </body>
-</html>
+    </html>
