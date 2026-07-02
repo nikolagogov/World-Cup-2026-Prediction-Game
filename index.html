@@ -162,7 +162,7 @@
         <div class="info-message">
             📊 <strong>Точкуване:</strong> Всяка част (ред.време, продължения, дузпи) се точкува отделно: 3т/2т/1т/0т<br>
             🎯 <strong>Бонуси (след групи):</strong> +10 за пълна точна подредба | +3 за точен 1-ви | +2 за точно 2-ро<br>
-            🏆 <strong>Бонуси за елиминации:</strong> до 70т бонус за точни победители в етапите (мин. 50% точни)
+            🏆 <strong>Бонуси за елиминации:</strong> Прогресивна скала - всеки следващ етап носи повече точки
         </div>
     </div>
 
@@ -749,14 +749,34 @@ function calculateEliminationPhaseBonus(player) {
     let all = getEliminationMatches();
     let totalBonus = 0;
     
+    // НОВА КОНФИГУРАЦИЯ - прогресивни стъпки
     const phaseConfig = {
-        "R32": { maxBonus: 24, minCorrect: 8, total: 16 },
-        "R16": { maxBonus: 16, minCorrect: 4, total: 8 },
-        "QF": { maxBonus: 12, minCorrect: 2, total: 4 },
-        "SF": { maxBonus: 8, minCorrect: 1, total: 2 },
-        "TP": { maxBonus: 4, minCorrect: 1, total: 1 },
-        "F": { maxBonus: 6, minCorrect: 1, total: 1 }
+        "R32": { 
+            minCorrect: 8, 
+            total: 16, 
+            startBonus: 12,
+            steps: [1, 2, 2, 3, 3, 5, 6, 8]
+        },
+        "R16": { minCorrect: 4, total: 8, startBonus: 16, steps: [3, 3, 4, 6] },
+        "QF": { minCorrect: 2, total: 4, startBonus: 12, steps: [6, 6] },
+        "SF": { minCorrect: 1, total: 2, startBonus: 9, steps: [9] },
+        "TP": { minCorrect: 1, total: 1, startBonus: 14, steps: [] },
+        "F": { minCorrect: 1, total: 1, startBonus: 21, steps: [] }
     };
+    
+    function getBonusWithSteps(correct, minCorrect, startBonus, steps) {
+        if (correct === minCorrect) return startBonus;
+        let bonus = startBonus;
+        let stepIndex = 0;
+        
+        for (let i = minCorrect + 1; i <= correct; i++) {
+            if (stepIndex < steps.length) {
+                bonus += steps[stepIndex];
+                stepIndex++;
+            }
+        }
+        return bonus;
+    }
     
     for (let phase in phaseConfig) {
         let phaseMatches = all.filter(m => m.phase === phase && !m.home.includes("Победител"));
@@ -779,7 +799,7 @@ function calculateEliminationPhaseBonus(player) {
         
         let config = phaseConfig[phase];
         if (correctCount >= config.minCorrect) {
-            let bonus = Math.round((correctCount / config.total) * config.maxBonus);
+            let bonus = getBonusWithSteps(correctCount, config.minCorrect, config.startBonus, config.steps);
             totalBonus += bonus;
         }
     }
