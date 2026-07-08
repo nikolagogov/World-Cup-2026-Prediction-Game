@@ -450,10 +450,10 @@ function getEliminationMatches() {
         return null;
     }
     
+    // Създаване на R32 мачовете
     round32Pairs.forEach((pair) => {
         let homeInfo = findTeam(pair.home);
         let awayInfo = findTeam(pair.away);
-        
         if (homeInfo && awayInfo) {
             all.push({
                 id: pair.id,
@@ -465,18 +465,18 @@ function getEliminationMatches() {
                 mult: 2,
                 name: "1/16 финали"
             });
-        } else {
-            console.warn(`Не мога да намеря отбор: ${!homeInfo ? pair.home : pair.away}`);
         }
     });
     
-    function getWinner(id){
+    function getWinner(id, matchList) {
+        matchList = matchList || all;
         let r = state.elimResults[id];
-        if (r && r.h !== '' && r.a !== '') {
-            let m = all.find(x => x.id === id);
+        if (r && r.h !== undefined && r.h !== '' && r.a !== undefined && r.a !== '') {
+            let m = matchList.find(x => x.id === id);
             if (m) {
-                if (r.h > r.a) return m.home;
-                if (r.a > r.h) return m.away;
+                let rh = parseInt(r.h), ra = parseInt(r.a);
+                if (rh > ra) return m.home;
+                if (ra > rh) return m.away;
                 if (r.exH !== undefined && r.exH !== '' && r.exA !== undefined && r.exA !== '') {
                     let exH = parseInt(r.exH), exA = parseInt(r.exA);
                     if (exH > exA) return m.home;
@@ -496,6 +496,7 @@ function getEliminationMatches() {
         return { id, home, away, phase, mult, name };
     }
     
+    // Създаване на R16 мачовете
     const r16Pairs = [
         { id: "M89", m1: "M74", m2: "M79" },
         { id: "M90", m1: "M73", m2: "M75" },
@@ -510,8 +511,8 @@ function getEliminationMatches() {
     let r16 = r16Pairs.map(p => {
         let m1 = all.find(m => m.id === p.m1);
         let m2 = all.find(m => m.id === p.m2);
-        let w1 = m1 ? getWinner(m1.id) : null;
-        let w2 = m2 ? getWinner(m2.id) : null;
+        let w1 = m1 ? getWinner(m1.id, all) : null;
+        let w2 = m2 ? getWinner(m2.id, all) : null;
         return createMatch(
             p.id,
             w1 || `Победител ${p.m1}`,
@@ -520,6 +521,9 @@ function getEliminationMatches() {
         );
     });
     
+    let allUpToR16 = [...all, ...r16];
+    
+    // Създаване на QF мачовете
     const qfPairs = [
         { id: "M97", m1: "M89", m2: "M90" },
         { id: "M98", m1: "M93", m2: "M94" },
@@ -530,8 +534,8 @@ function getEliminationMatches() {
     let qf = qfPairs.map(p => {
         let m1 = r16.find(m => m.id === p.m1);
         let m2 = r16.find(m => m.id === p.m2);
-        let w1 = m1 ? getWinner(m1.id) : null;
-        let w2 = m2 ? getWinner(m2.id) : null;
+        let w1 = m1 ? getWinner(m1.id, allUpToR16) : null;
+        let w2 = m2 ? getWinner(m2.id, allUpToR16) : null;
         return createMatch(
             p.id,
             w1 || `Победител ${p.m1}`,
@@ -540,6 +544,9 @@ function getEliminationMatches() {
         );
     });
     
+    let allUpToQF = [...allUpToR16, ...qf];
+    
+    // Създаване на SF мачовете
     const sfPairs = [
         { id: "M101", m1: "M97", m2: "M98" },
         { id: "M102", m1: "M99", m2: "M100" }
@@ -548,8 +555,8 @@ function getEliminationMatches() {
     let sf = sfPairs.map(p => {
         let m1 = qf.find(m => m.id === p.m1);
         let m2 = qf.find(m => m.id === p.m2);
-        let w1 = m1 ? getWinner(m1.id) : null;
-        let w2 = m2 ? getWinner(m2.id) : null;
+        let w1 = m1 ? getWinner(m1.id, allUpToQF) : null;
+        let w2 = m2 ? getWinner(m2.id, allUpToQF) : null;
         return createMatch(
             p.id,
             w1 || `Победител ${p.m1}`,
@@ -558,21 +565,29 @@ function getEliminationMatches() {
         );
     });
     
+    let allUpToSF = [...allUpToQF, ...sf];
+    
+    // Мач за 3-то място
     let thirdPlaceMatch = [];
     if (sf.length >= 2) {
         let s1 = sf[0];
         let s2 = sf[1];
-        let loser1 = getWinner(s1.id) ? (getWinner(s1.id) === s1.home ? s1.away : s1.home) : `Загубил ${s1.home} vs ${s1.away}`;
-        let loser2 = getWinner(s2.id) ? (getWinner(s2.id) === s2.home ? s2.away : s2.home) : `Загубил ${s2.home} vs ${s2.away}`;
+        let w1 = getWinner(s1.id, allUpToSF);
+        let w2 = getWinner(s2.id, allUpToSF);
+        let loser1 = w1 ? (w1 === s1.home ? s1.away : s1.home) : `Загубил ${s1.home} vs ${s1.away}`;
+        let loser2 = w2 ? (w2 === s2.home ? s2.away : s2.home) : `Загубил ${s2.home} vs ${s2.away}`;
         thirdPlaceMatch.push(createMatch("M103", loser1, loser2, "TP", 5, "Мач за 3-то място"));
     }
     
+    let allUpToTP = [...allUpToSF, ...thirdPlaceMatch];
+    
+    // Финал
     let final = [];
     if (sf.length >= 2) {
         let s1 = sf[0];
         let s2 = sf[1];
-        let w1 = getWinner(s1.id) || `Победител ${s1.home} vs ${s1.away}`;
-        let w2 = getWinner(s2.id) || `Победител ${s2.home} vs ${s2.away}`;
+        let w1 = getWinner(s1.id, allUpToTP) || `Победител ${s1.home} vs ${s1.away}`;
+        let w2 = getWinner(s2.id, allUpToTP) || `Победител ${s2.home} vs ${s2.away}`;
         final.push(createMatch("M104", w1, w2, "F", 6, "Финал"));
     }
     
