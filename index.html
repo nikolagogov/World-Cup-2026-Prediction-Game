@@ -620,7 +620,6 @@ function isRoundComplete(phase) {
 }
 
 function getAvailablePhases() {
-function getAvailablePhases() {
     let phases=[{id:"group", name:"🏆 Групова фаза", mult:1}];
     let groupComplete = isGroupStageComplete();
     if(groupComplete && getBestThirdsRaw().length===12){
