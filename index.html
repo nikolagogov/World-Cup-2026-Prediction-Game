@@ -620,6 +620,7 @@ function isRoundComplete(phase) {
 }
 
 function getAvailablePhases() {
+function getAvailablePhases() {
     let phases=[{id:"group", name:"🏆 Групова фаза", mult:1}];
     let groupComplete = isGroupStageComplete();
     if(groupComplete && getBestThirdsRaw().length===12){
@@ -627,8 +628,10 @@ function getAvailablePhases() {
         if(isRoundComplete("R32")) phases.push({id:"R16", name:"🏅 1/8 финали", mult:3});
         if(isRoundComplete("R16")) phases.push({id:"QF", name:"🏅 1/4 финали", mult:4});
         if(isRoundComplete("QF")) phases.push({id:"SF", name:"🏅 Полуфинали", mult:5});
-        if(isRoundComplete("SF")) phases.push({id:"TP", name:"🥉 Мач за 3-то място", mult:5});
-        if(isRoundComplete("TP")) phases.push({id:"F", name:"🏆 Финал", mult:6});
+        if(isRoundComplete("SF")) {
+            phases.push({id:"TP", name:"🥉 Мач за 3-то място", mult:5});
+            phases.push({id:"F", name:"🏆 Финал", mult:6});
+        }
     }
     return phases;
 }
